@@ -53,9 +53,11 @@ class _BackupPageState extends State<BackupPage> {
     final url = await discoverServer();
     if (url == null) {
       setState(() {
-        _status = 'Servidor não encontrado. Verifique se o Python está rodando.';
+        _status = 'Servidor não encontrado automaticamente.';
         _loading = false;
       });
+
+      _showManualIpDialog();
       return;
     }
     final svc = BackupService(url);
@@ -144,6 +146,11 @@ class _BackupPageState extends State<BackupPage> {
               icon: const Icon(Icons.wifi_find),
               label: const Text('Encontrar Servidor'),
             ),
+            OutlinedButton.icon(
+              onPressed: _loading ? null : _showManualIpDialog,
+              icon: const Icon(Icons.edit),
+              label: const Text('Inserir IP manualmente'),
+            ),
             const SizedBox(height: 8),
             ElevatedButton.icon(
               onPressed: _loading ? null : _pickFiles,
@@ -168,6 +175,82 @@ class _BackupPageState extends State<BackupPage> {
             if (_loading) const Center(child: CircularProgressIndicator()),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _connectManual(String url) async {
+
+    setState(() {
+      _loading = true;
+      _status = 'Testando conexão...';
+    });
+
+    final svc = BackupService(url);
+    final ok = await svc.pingServer();
+
+    if (ok) {
+      setState(() {
+        _serverUrl = url;
+        _status = 'Conectado manualmente: $url';
+        _loading = false;
+      });
+    } else {
+      setState(() {
+        _status = 'Falha ao conectar. Verifique o IP.';
+        _loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Servidor não respondeu')),
+      );
+    }
+  }
+
+  void _showManualIpDialog() {
+
+    final controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Servidor não encontrado'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Inserir IP manualmente'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                hintText: 'Ex: 192.168.0.7:5000',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final input = controller.text.trim();
+
+              if (input.isEmpty) return;
+
+              final url = input.startsWith('http')
+                  ? input
+                  : 'http://$input';
+
+              Navigator.pop(context);
+
+              await _connectManual(url);
+            },
+            child: const Text('Conectar'),
+          ),
+        ],
       ),
     );
   }
